@@ -1,0 +1,599 @@
+---
+title: "The Association Between Heart Disease and Clinical, Demographic, and Lifestyle Factors: An abstract"
+author: "David Moshi"
+output:
+  pdf_document: default
+  html_document: default
+header-includes:
+  - \usepackage{authblk}
+---
+
+```{r clearing environment, include=FALSE}
+rm(list = ls())
+```
+
+```{r setup libraries, include=FALSE}
+# Function to load required libraries and install them if they are not already installed; we could potentially write this as a function in a seperate document such as handy dandy functions and then source it here.
+load_libraries <- function(libraries) {
+  for (lib in libraries) {
+    if (!require(lib, character.only = TRUE)) {
+      install.packages(lib, dependencies = TRUE)
+      library(lib, character.only = TRUE)
+    }
+  }
+}
+
+#loading libraries
+required_libraries <- c("dplyr", "ggplot2", "tidyverse", "magrittr","mice", "GGally", "corrplot", "waffle","broom","car", "vcd", "knitr")
+
+
+load_libraries(required_libraries)
+```
+
+Date: `r Sys.Date()`
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r dataset, include = FALSE}
+
+data_raw <- read.csv("Heart failure.csv")
+
+#summarizing data 
+summary(data_raw)
+```
+
+```{r renaming variables,include=FALSE}
+data_raw <- dplyr::rename(data_raw,
+                          num_age_in_years = Age,
+                          bin_sex_is_male = Sex,
+                          fac_chest_pain_type = ChestPainType,
+                          num_rest_blood_press_mmHg = RestingBP,
+                          num_serum_cholestrol_mm_per_dl = Cholesterol,
+                          bin_fasting_blood_gluc_gt_120mg_per_dl = FastingBS,
+                          fac_rest_ecg_sign = RestingECG,
+                          num_max_heartrate_bpm = MaxHR,
+                          bin_exercise_induced_angina = ExerciseAngina,
+                          num_oldpeak_in_st_depression = Oldpeak,
+                          fac_st_slope = ST_Slope,
+                          bin_heart_disease_label = HeartDisease)
+```
+
+```{r specifying data type, include=FALSE}
+data_raw <- dplyr::mutate(data_raw,
+num_age_in_years = as.numeric(num_age_in_years),
+bin_sex_is_male=dplyr::recode_factor(bin_sex_is_male, 
+                   'M' = '1',
+                   'F' = '0'),
+fac_chest_pain_type = as.factor(fac_chest_pain_type),
+num_rest_blood_press_mmHg = as.numeric(num_rest_blood_press_mmHg),
+num_serum_cholestrol_mm_per_dl = as.numeric(num_serum_cholestrol_mm_per_dl),
+bin_fasting_blood_gluc_gt_120mg_per_dl = as.factor(bin_fasting_blood_gluc_gt_120mg_per_dl),
+fac_rest_ecg_sign=dplyr::recode_factor(fac_rest_ecg_sign,
+                   'Normal' = 'N',
+                   'ST' = 'ST',
+                   'LVH' = 'LVH',
+                   .default = NULL),
+num_max_heartrate_bpm = as.numeric(num_max_heartrate_bpm),
+bin_exercise_induced_angina=dplyr::recode_factor(bin_exercise_induced_angina,
+                   'N' = '0',
+                   'Y' = '1'),
+num_oldpeak_in_st_depression = as.numeric(num_oldpeak_in_st_depression),
+fac_st_slope=dplyr::recode_factor(fac_st_slope,
+                   'Up' = '1',
+                   'Flat' = '0',
+                   'Down' = '-1'),
+bin_heart_disease_label = as.factor(bin_heart_disease_label)
+  )
+```
+
+```{r summary recoded, include=FALSE}
+summary(data_raw)
+```
+
+```{r imputing data/ cleaning data chunk, include=FALSE}
+#Oldpeak has -values. This is not possible. This line creates a new dataframe where the negative values of Oldpeak are changed to positve values.This is done to maintain a clean raw dataset for future reference. 0 values in cholesterol and blood pressure are changed to NA to perform imputation.
+
+data_imp <- within(data_raw, num_oldpeak_in_st_depression <- abs(num_oldpeak_in_st_depression))
+data_imp$num_rest_blood_press_mmHg[data_imp$num_rest_blood_press_mmHg == 0] <- NA
+data_imp$num_serum_cholestrol_mm_per_dl[data_imp$num_serum_cholestrol_mm_per_dl == 0] <- NA
+
+#imputing resting BP
+data_imp %<>% 
+  mice(method = 'pmm', m = 1, maxit = 5, seed = 500) %>% 
+  complete(1)
+
+#imputing cholesterol 
+data_imp %<>% 
+  mice(method = 'pmm', m = 1, maxit = 5, seed = 500) %>% 
+  complete(1)
+
+#checking to see result of imputation 
+summary(data_imp)
+
+#We have probably violated some assumptions of imputation here. The values are not missing at random. We should probably mention this somewhere.
+```
+
+```{r summary imputed, include=FALSE}
+summary(data_imp)
+```
+## Introduction
+Cardiovascular disease is a leading cause of morbidity and mortality, responsible for 17.9 million deaths annually. Early detection is crucial for improving patient outcomes, yet challenges remain in identifying predictive factors. While established risk factors such as hypertension, diabetes and smoking are well-documented, sex-related differences in heart disease presentation and symptomatology require further investigation. This study analyzes the Heart Failure Prediction Dataset from Kaggle to explore clinical, demographic, and lifestyle factors associated with heart disease. Identifying these patterns can enhance risk assessment and prevention strategies.
+
+## Methods
+This study used the Heart Failure Prediction Dataset from Kaggle, including 918 patients with 12 clinical and demographic variables. Data preprocessing included encoding categorical variables, standardising numerical features and imputing missing or negative data using predictive mean matching. Exploratory visualisation examined variable distributions and associations. Pairwise correlations assessed relationships among numeric predictors.  A stepwise logistic regression model was used to identify significant predictors of heart disease. All analyses were performed in R version 4.4.2. 
+
+## Results
+This study included 918 patients (725 males, 193 females) with a mean age of 53.51 years (SD = 9.43). Heart disease was more prevalent in males (63.2%) than in females (25.9%) (Table 1). 
+Correlation analysis showed weak correlations, with the strongest positive correlation between age and resting blood pressure (r = 0.26) and old peak and age (r = 0.26). The strongest negative correlation was observed between maximum heart rate and age (r = -0.38) (Figure 1).
+The mosaic plot indicated a higher prevalence of heart disease in males (n=458), particularly those with asymptomatic and non-anginal chest pain (Figure 2). 
+Logistic regression revealed that, compared to asymptomatic chest pain, the odds of heart disease were lower for atypical angina (OR = 0.153, 95% CI: 0.080–0.284), non-anginal pain (OR = 0.201, 95% CI: 0.120–0.332), and typical angina (OR = 0.240, 95% CI: 0.103–0.554). Model assumptions were met.
+
+## Discussion
+This study highlights sex differences in heart disease prevalence, with higher rates in males. Asymptomatic chest pain predicted higher risk, contrary to expectations. The lack of association between sex, chest pain type, and heart disease suggests that symptomatology alone may not be a strong predictor. Further research is needed to refine predictive models, incorporating additional clinical and lifestyle factors. 
+
+```{r coding for baseline table, include=FALSE }
+# Helper function to calculate mean and SD (for both males and females)
+calc_mean_sd <- function(data, var_name) {
+  filtered_data <- data[[var_name]][data[[var_name]] > 0]
+  sprintf("%.2f (%.2f)", mean(filtered_data, na.rm = TRUE), sd(filtered_data, na.rm = TRUE))
+}
+
+# Helper function to calculate count and percentage (for both males and females)
+calc_count_percent <- function(data, var_name, value) {
+  count <- sum(data[[var_name]] == value, na.rm = TRUE)
+  sprintf("%d (%.1f%%)", count, (count / nrow(data)) * 100)
+}
+
+# Define male and female data subsets
+male_data <- data_imp[data_imp$bin_sex_is_male == 1, ] 
+female_data <- data_imp[data_imp$bin_sex_is_male == 0, ]
+
+# Number of participants per sex
+total_n <- nrow(data_imp)
+sex_male_n <- nrow(male_data)
+sex_female_n <- nrow(female_data)
+
+# Age per sex
+age_total <- calc_mean_sd(data_imp, "num_age_in_years")
+age_male <- calc_mean_sd(male_data, "num_age_in_years")
+age_female <- calc_mean_sd(female_data, "num_age_in_years")
+
+# Resting bloodpressure 
+rbp_total <- calc_mean_sd(data_imp, "num_rest_blood_press_mmHg")
+rbp_male <- calc_mean_sd(male_data, "num_rest_blood_press_mmHg")
+rbp_female <- calc_mean_sd(female_data, "num_rest_blood_press_mmHg")
+
+# Serum cholesterol 
+chol_total <- calc_mean_sd(data_imp, "num_serum_cholestrol_mm_per_dl")
+chol_male <- calc_mean_sd(male_data, "num_serum_cholestrol_mm_per_dl")
+chol_female <- calc_mean_sd(female_data, "num_serum_cholestrol_mm_per_dl")
+
+#maximum heartrate
+maxHR_total <- calc_mean_sd(data_imp, "num_max_heartrate_bpm")
+maxHR_male <- calc_mean_sd(male_data, "num_max_heartrate_bpm")
+maxHR_female <- calc_mean_sd(female_data, "num_max_heartrate_bpm")
+
+#oldpeak in ST depression
+oldpeak_total <- calc_mean_sd(data_imp, "num_oldpeak_in_st_depression")
+oldpeak_male <- calc_mean_sd(male_data, "num_oldpeak_in_st_depression")
+oldpeak_female <- calc_mean_sd(female_data, "num_oldpeak_in_st_depression")
+
+# Blood sugar 
+sugar_total <- calc_count_percent(data_imp,"bin_fasting_blood_gluc_gt_120mg_per_dl", 1)
+sugar_male <- calc_count_percent(male_data,"bin_fasting_blood_gluc_gt_120mg_per_dl", 1)
+sugar_female <- calc_count_percent(female_data,"bin_fasting_blood_gluc_gt_120mg_per_dl", 1)
+
+# Chest pain types
+get_chest_pain_total <- function(cp_type) { 
+  count <- sum(data_imp$fac_chest_pain_type == cp_type, na.rm = TRUE) 
+  sprintf("%d (%.1f%%)", count, (count / nrow(data_imp)) * 100)
+}
+
+get_chest_pain_sex <- function(cp_type, sex) { 
+  subset_data <- data_imp[data_imp$bin_sex_is_male == sex, ] 
+  count <- sum(subset_data$fac_chest_pain_type == cp_type, na.rm = TRUE) 
+  sprintf("%d (%.1f%%)", count, (count / nrow(subset_data)) * 100)
+}
+
+cp_types <- c("TA", "ATA", "NAP", "ASY")
+
+chest_pain_t <- sapply(cp_types, get_chest_pain_total)
+chest_pain_male <- sapply(cp_types, function(x) get_chest_pain_sex(x, 1))
+chest_pain_female <- sapply(cp_types, function(x) get_chest_pain_sex(x, 0))
+
+# Exercise angina
+angina_total <- calc_count_percent(data_imp, "bin_exercise_induced_angina", 1)
+angina_male <- calc_count_percent(male_data, "bin_exercise_induced_angina", 1)
+angina_female <- calc_count_percent(female_data, "bin_exercise_induced_angina", 1)
+
+# Heartdisease 
+heartdisease_total <- calc_count_percent(data_imp, "bin_heart_disease_label", 1)
+heartdisease_male <- calc_count_percent(male_data, "bin_heart_disease_label", 1)
+heartdisease_female <- calc_count_percent(female_data, "bin_heart_disease_label", 1)
+```
+
+
+Table 1: Baseline characteristics
+
+**Characteristic**                  |**Total(n=`r total_n`)**|**Male(n=`r sex_male_n`)**|**Female(n=`r sex_female_n`)**
+:-----------------------------------|:-----------------------|:-------------------------|:------------------
+Age (years)                         |`r age_total`           | `r age_male`             | `r age_female`
+Resting bloodpressure (mmHg)        |`r rbp_total`           | `r rbp_male`             | `r rbp_female`
+Serum cholesterol (mm/dl)           |`r chol_total`          | `r chol_male`            | `r chol_female`
+Maximum heartrate (bpm)             |`r maxHR_total`         | `r maxHR_male`           | `r maxHR_female`
+Oldpeak ST depression               |`r oldpeak_total`       | `r oldpeak_male`         | `r oldpeak_female`
+Fasting blood sugar >120 g/dl       |`r sugar_total`         | `r  sugar_male`          | `r sugar_female`
+Chest pain type                     |                        |                          | 
+&nbsp;  Typical angina              |`r chest_pain_t[1]`     | `r chest_pain_male[1]`   | `r chest_pain_female[1]`
+&nbsp;  Atypical angina             |`r chest_pain_t[2]`     | `r chest_pain_male[2]`   | `r chest_pain_female[2]`
+&nbsp;  Non-anginal pain            |`r chest_pain_t[3]`     | `r chest_pain_male[3]`   | `r chest_pain_female[3]`
+&nbsp;  Asymptomatic                |`r chest_pain_t[4]`     | `r chest_pain_male[4]`   | `r chest_pain_female[4]`
+Exercise angina                     |`r angina_total`        | `r angina_male`          | `r angina_female`
+Heart disease                       |`r heartdisease_total`  | `r heartdisease_male`    | `r heartdisease_female`
+
+```{r figure 1 correlation matrix imputed, include=TRUE, echo=FALSE, fig.cap="Correlation matrix of numeric variables", fig.margin=c(0, 0, 0, 0), out.width="75%", out.height="75%"}
+
+numeric_data <- data_imp[, sapply(data_imp, is.numeric)]
+
+library(corrplot)
+
+#correlation matrix (lower half + altered labels)
+corr <- cor(numeric_data, use = "pairwise.complete.obs")
+colnames(corr) <- c("Age", "Resting bloodpressure","Serum cholesterol","Maximum heartrate", "Old peak ST depression")
+rownames(corr) <- colnames(corr)
+
+diag(corr) <- NA
+
+correlation_matrix <-corrplot(corr,
+     	type = "lower",
+     	addCoef.col = "black",
+     	tl.cex = 0.8, 
+     	tl.col = "black",
+     	col = colorRampPalette(c("red", "white", "blue"))(200),
+     	cl.pos = "r",
+     	na.label = " "
+   	)
+
+```
+
+```{r figure 2 mosaic plot imputed, include=TRUE, echo=FALSE, fig.cap="Mosaic plot showing sex differences in heart disease by chest pain type (ASY: asymptomatic; ATA: atypical angina; NAP: non-anginal pain; TA: typical angina)", out.width="75%", out.height="75%", fig.align='center'}
+mosaic_data <- table(data_imp$bin_sex_is_male, data_imp$fac_chest_pain_type, data_imp$bin_heart_disease_label)
+
+dimnames(mosaic_data) <- list(
+    Sex = c("Male", "Female"),
+    ChestPainType = c("ASY", "ATA", "NAP", "TA"),
+    HeartDisease = c("No", "Yes")
+)
+
+colors <- rainbow(length(mosaic_data))
+
+mosaic(mosaic_data, 
+       shade = TRUE, 
+       legend = FALSE,
+       labeling = labeling_values,
+       xlab = "Chest Pain Type",       
+       ylab = "Sex",
+       gp = gpar(fill = colors))
+```
+
+```{r logistic regression imputed, include= FALSE, echo = FALSE}
+  data_imp$bin_heart_disease_label<-as.factor(data_imp$bin_heart_disease_label)
+  data_imp$fac_chest_pain_type<-as.factor(data_imp$fac_chest_pain_type)
+  
+
+  chest_pain_model <- glm(bin_heart_disease_label~fac_chest_pain_type, data = data_imp, family = binomial)
+  summary(chest_pain_model)
+  
+  
+  model_full <- glm(bin_heart_disease_label ~ num_age_in_years + bin_sex_is_male + fac_chest_pain_type + num_rest_blood_press_mmHg + 
+                  num_serum_cholestrol_mm_per_dl + bin_fasting_blood_gluc_gt_120mg_per_dl + fac_rest_ecg_sign + num_max_heartrate_bpm + 
+                  bin_exercise_induced_angina + num_oldpeak_in_st_depression + fac_st_slope, 
+                  data = data_imp, family = binomial)
+  
+  summary(model_full)
+  
+  final_model <- step(model_full, direction = "backward")
+  
+  #table of coefficients
+ library(broom)
+ final_model_table<- tidy(final_model)
+ 
+  final_model_table$OR<- exp(final_model_table$estimate) #add OR's
+ 
+  final_model_confint <- confint(final_model) #calculate CI's for OR
+  final_model_confint <- exp(final_model_confint)
+  final_model_table$lower_limit_CI <- final_model_confint[,1] #add lower limit to table
+  final_model_table$upper_limit_CI <- final_model_confint[,2] #add upper limit to table
+ 
+ 
+ kable(final_model_table)
+ 
+#results: Significant coefficients for all chest pain types (ATA, NAP, TA), the reference category is asymptomatic chest pain. All are negative. When adjusting for age, maximum heart rate, serum cholesterol levels, sex, fasting blood glucose. exercise induced angina, old peak in st depression and the st-slope, the odds of having heart disease is lower for all types of chest pain (ATA, NAP, and TA) compared to asymptomatic chest pain.
+```
+
+```{r linearity assumption, include=FALSE}
+#linearity
+library(car)
+
+predictors <- c("num_age_in_years", "bin_sex_is_male", "fac_chest_pain_type", "num_rest_blood_press_mmHg","num_serum_cholestrol_mm_per_dl", "bin_fasting_blood_gluc_gt_120mg_per_dl", "fac_rest_ecg_sign", "num_max_heartrate_bpm", "bin_exercise_induced_angina", "num_oldpeak_in_st_depression","fac_st_slope") #(some a categorical so linear by design)
+
+for (var in predictors) {
+  logit <- predict(final_model, type = "link")  # Log-odds
+ 
+  # Plot predictor vs log-odds
+  plot(data_imp[[var]], logit, main = paste("Log-Odds vs", var),
+   	xlab = var, ylab = "Log-Odds", pch = 19, col = "lightblue")
+  abline(lm(logit ~ data_imp[[var]]), col = "lightgreen")  
+  cat("\n")  # Adds a blank line between plots
+}
+```
+
+```{r multicollinearity assumption, include=FALSE}
+#no multicolinearity (VIF's)
+library(car)
+vif(final_model)
+
+#conclusions: all VIF's < 10 -> no multicolinearity
+```
+
+```{r influential outliers, include=FALSE}
+#no influential outliers (using cook's distance)
+plot(cooks.distance(final_model), main = "Cook's Distance", ylab = "Cook's Distance")
+abline(h = 1, col = "red", lty = 2)
+
+#conclusion: all <1 -> no influential outliers
+```
+
+```{r histograms raw, include=FALSE}
+#plotting histograms of all continuous variables 
+lapply(names(data_raw)[sapply(data_raw, is.numeric)], function(x) hist(data_raw[[x]], breaks = 30, col = "blue", ylab = x, main = paste("Histogram of", x)))
+
+#From these graphs you can see that data on cholesterol level is missing. All graphs appear to be almost normally distributed. 
+```
+
+```{r qq plots raw, include=FALSE}
+#plot a qq plot for all continuous variables
+lapply(names(data_raw)[sapply(data_raw, is.numeric)], function(x) 
+  {
+  qqnorm(data_raw[[x]], main = paste("QQ plot of", x))
+  qqline(data_raw[[x]], col = "red")  # Adds a reference line
+})
+
+#The cholesterol and oldpeak group show to have deviations from the reference line. 
+```
+
+```{r piechart raw, include=FALSE}
+#plotting piecharts of the categorical variables showing percentages
+lapply(names(data_raw)[sapply(data_raw, is.factor)], function(x) {
+  counts <- table(data_raw[[x]])
+  labels <- paste0(names(counts), " (", round(100 * counts / sum(counts), 1), "%)")
+  pie(counts, col = rainbow(length(counts)), main = paste("Piechart of", x), labels = labels)
+})
+#The population consists mostly of males. The distribution of heart disease is almost equally distributed in the population
+```
+
+```{r pairs for heart disease raw, include=FALSE}
+#combine every option continous variable in a qq plot stratified by heart disease red = disease 
+pairs(data_raw[, c("num_age_in_years","num_rest_blood_press_mmHg","num_serum_cholestrol_mm_per_dl","num_max_heartrate_bpm","num_oldpeak_in_st_depression")], col = ifelse(data_raw$bin_heart_disease_label == 1, "red", "blue"))
+
+#You can clearly see disease clustering in certain areas here. It also looks like there are some outliers. It also shows that mostly diseased participants are scoring 0 on cholesterol. It looks like mostly undiseased participants are scoring 0 on oldpeak.
+```
+
+```{r qq plot for sex raw, include=FALSE}
+#combine every option continuous variable in a qq plot stratified by sex purple = male 
+pairs(data_raw[, c("num_age_in_years","num_rest_blood_press_mmHg","num_serum_cholestrol_mm_per_dl","num_max_heartrate_bpm","num_oldpeak_in_st_depression")], col = ifelse(data_raw                                                                              $bin_sex_is_male == 1, "purple", "green"))
+
+#From this graph you can see that especially male participants are missing cholesterol data. Most 0's within oldpeak appear to be male as well.
+```
+
+```{r bar chart for heart disease raw, include=FALSE}
+#stacked bar chart of the categorical variables with the stratification for heart disease showing the distribution of the categorical variables in diseased and none diseased participants
+lapply(names(data_raw)[sapply(data_raw, is.factor)], function(x) {
+  counts <- table(data_raw[[x]], data_raw$bin_heart_disease_label)
+  barplot(prop.table(counts, 2), col = rainbow(nrow(counts)), legend = rownames(counts), beside = TRUE, xlab = "HeartDisease", ylab = x, main = paste("Stacked barplot of", x))
+})
+
+#These graphs show the distribution differences for categorical variables between diseased (heart disease) and non diseased participants. 
+#The proportion of males is much higher in diseased individuals.
+#The proportion of chest pain type ASY is much higher in diseased individuals.
+#The proportion of fasting blood sugar < 120mg/dl is much higher in diseased individuals.
+#Resting ECG is not very informative
+#The proportion of exercise angina is much higher in diseased individuals.
+#The proportion of flat ST slope is much higher in diseased individuals.
+```
+
+```{r bar chart for sex raw, include=FALSE}
+#stacked barplot for the categorical variables with the outcome sex showing the distribution of the categorical variables between male/female
+lapply(names(data_raw)[sapply(data_raw, is.factor)], function(x) {
+  counts <- table(data_raw[[x]], data_raw$bin_sex_is_male)
+  barplot(prop.table(counts, 2), col = rainbow(nrow(counts)), legend = rownames(counts), beside = TRUE, xlab = "Sex", ylab = x, main = paste("Stacked barplot of", x))
+})
+
+#These graphs show the distribution differences between gender. 
+#The distribution of males appears to show that more males are asymptomatic.
+#The distribution of fasting blood glucose looks the same for males and females.
+#The distribution of resting ECG looks the same for males and females. 
+#The distribution of exercise angina appears to show that a higher proportion of males experience exercise angina 
+#The distribution of ST slope appears to show that a higher proportion of male have a flat st slope
+#The distribution of heart disease shows that more male participants have heart disease -> we should probably correct for this somewhere in the analysis.
+```
+
+```{r histogram set for heart disease raw, include=FALSE}
+num_vars <- c("num_age_in_years", "num_rest_blood_press_mmHg", 
+              "num_serum_cholestrol_mm_per_dl", "num_max_heartrate_bpm", 
+              "num_oldpeak_in_st_depression")
+
+for (var in num_vars) {
+  p <- ggplot(data_raw, aes_string(x = var, fill = "bin_heart_disease_label")) +
+    geom_histogram(binwidth = 5, alpha = 0.5) +
+    scale_fill_manual(values = c("blue", "red")) +
+    theme_bw()
+print (p)
+}
+```
+
+```{r histogram set for sex raw, include=FALSE}
+num_vars <- c("num_age_in_years", "num_rest_blood_press_mmHg", 
+              "num_serum_cholestrol_mm_per_dl", "num_max_heartrate_bpm", 
+              "num_oldpeak_in_st_depression")
+
+for (var in num_vars) {
+  p <- ggplot(data_raw, aes_string(x = var, fill = "bin_sex_is_male")) +
+    geom_histogram(binwidth = 5, alpha = 0.5) +
+    scale_fill_manual(values = c("purple", "green")) +
+    theme_bw()
+print (p)
+}
+```
+
+
+```{r correlation plot raw, include=FALSE}
+subset_hf <- dplyr::select(data_raw,
+num_age_in_years, num_rest_blood_press_mmHg, num_max_heartrate_bpm,
+num_serum_cholestrol_mm_per_dl,num_oldpeak_in_st_depression)
+
+corr_matrix <- cor(subset_hf)
+corrplot(corr_matrix, method = "square",
+         col = colorRampPalette(c("blue", "white", "red"))(200),  
+         type = "upper", 
+         tl.col = "black")
+
+#A negative correlation can be seen between:
+#- heartrate and age 
+#- cholesterol and age 
+#- bloodpressure and heartrate 
+#- heartrate and oldpeak 
+
+#A positive correlation can be seen between: 
+#- age and bloodpressure 
+#- age and oldpeak 
+#- bloodpressure and cholesterol 
+#- oldpeak and bloodpressure 
+#- heartrate and cholesterol
+```
+
+```{r another matrix plot, include=FALSE}
+plot(numeric_data , pch=20 , cex=1.5 , col="#69b3a2")
+
+colnames(numeric_data)[colnames(numeric_data) == "num_age_in_years"] <- "Age"
+colnames(numeric_data)[colnames(numeric_data) == "num_rest_blood_press_mmHg"] <- "Resting Blood Pressure"
+colnames(numeric_data)[colnames(numeric_data) == "num_serum_cholestrol_mm_per_dl"] <- "Serum Cholestrol"
+colnames(numeric_data)[colnames(numeric_data) == "num_max_heartrate_bpm"] <- "Max Heart Rate"
+colnames(numeric_data)[colnames(numeric_data) == "num_oldpeak_in_st_depression"] <- "Oldpeak"
+
+correlation_table<- round(cor(numeric_data),2)
+
+library(knitr)
+kable(correlation_table,
+      caption = "Table of correlation coefficients", 
+      format = "html",
+      digits = 2,
+      align = "c") 
+```
+ 
+```{r waffle charts raw, include = FALSE}
+  #sex distribution among heart disease patients (donut)
+
+  data_hd <- data_raw[data_raw$bin_heart_disease_label == 1,]
+  
+  Sex_count <- data_hd %>%
+    count(bin_sex_is_male)
+  
+  Sex_count$pct <- Sex_count$n / sum(Sex_count$n) * 100
+  
+  Sex_count$ymax <- cumsum(Sex_count$pct)  
+  Sex_count$ymin <- c(0, head(Sex_count$ymax, n = -1))
+  
+  print(
+  ggplot(Sex_count, aes(ymin = ymin, ymax = ymax, xmax = 4, xmin = 3, fill = bin_sex_is_male)) +
+    geom_rect() +
+    coord_polar(theta = "y") + 
+    xlim(c(2, 4)) +
+    scale_fill_manual(values = c("lightblue", "pink")) +  # Fixed missing closing parenthesis here
+    theme_void()
+    )
+                      
+  #sex and chest pain type
+  chestpain_sex_counts <- data_hd %>%
+    count(bin_sex_is_male, fac_chest_pain_type) %>%
+    arrange(bin_sex_is_male, fac_chest_pain_type)
+  
+  ggplot(data = chestpain_sex_counts, aes(fill=bin_sex_is_male, values=n)) +
+  geom_waffle(color = "white", size = 1.125, n_rows = 6) +
+  facet_wrap(~fac_chest_pain_type, ncol=1) +
+  theme_void() +
+  scale_fill_manual(values = c("lightblue", "pink"))+
+  labs(title="Chest Pain Type Distribution by Sex in Patients with Heart Disease")+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+  #sex and ST slope
+  STslope_sex_counts <- data_hd %>%
+    count(bin_sex_is_male, fac_st_slope) %>%
+    arrange(bin_sex_is_male, fac_st_slope)
+  
+  ggplot(data = STslope_sex_counts, aes(fill=bin_sex_is_male, values=n)) +
+  geom_waffle(color = "white", size = 1.125, n_rows = 6) +
+  facet_wrap(~fac_st_slope, ncol=1) +
+  theme_void() +
+  scale_fill_manual(values = c("lightblue", "pink"))+
+  labs(title="ST slope by Sex in Patients with Heart Disease")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r Age and different variables raw, include = FALSE}
+  for (i in colnames(data_raw)){
+    if(i != "num_age_in_years" ){
+      if (is.numeric(data_raw[[i]])){ 
+        #scatterplot with trend line and CI's
+        print(ggplot(data_raw, aes(x=num_age_in_years, y=data_raw[[i]])) + 
+        geom_point( color="#69b3a2") +
+        geom_smooth(method=lm , color="red", fill="#868387", se=TRUE)+
+        labs(x = "num_age_in_years", y = i))
+      }
+      
+      else if (is.factor(data_raw[[i]])) { 
+        #boxplot
+        print(ggplot(data_raw, aes(x=data_raw[[i]], y=num_age_in_years)) + 
+        geom_boxplot(fill="slateblue", alpha=0.2)+
+        labs(x = i, y = "num_age_in_years"))
+      
+        #violin plot
+        print(ggplot(data_raw, aes(x = data_raw[[i]], y = num_age_in_years)) +
+        geom_violin(fill = "#40a86c", color = "black") +
+        labs(x = i, y = "num_age_in_years") +
+        theme_minimal())
+      }
+    }
+
+  }
+    
+```
+
+```{r visual inspection imputed data, include=FALSE}
+#plotting histograms of all continuous variables 
+lapply(names(data_imp)[sapply(data_imp, is.numeric)], function(x) hist(data_imp[[x]], breaks = 30, col = "blue", ylab = x, main = paste("Histogram of", x)))
+
+#plot a qq plot for all continuous variables
+lapply(names(data_imp)[sapply(data_imp, is.numeric)], function(x) qqnorm(data_imp[[x]], main = paste("QQ plot of", x)))
+#After imputation we can see that the data is much cleaner. Especially cholesterol and Oldpeak look better. 
+```
+
+```{r qq plot heart disease for imputed data, include=FALSE}
+#combine every option continuous variable in a qq plot stratified by heart disease red = disease 
+pairs(data_imp[, c("num_age_in_years","num_rest_blood_press_mmHg","num_serum_cholestrol_mm_per_dl","num_max_heartrate_bpm","num_oldpeak_in_st_depression")], col = ifelse(data_imp$bin_heart_disease_label == 1, "red", "blue"))
+```
+
+```{r qq plot sex for imputed data, include=FALSE}
+pairs(data_imp[, c("num_age_in_years","num_rest_blood_press_mmHg","num_serum_cholestrol_mm_per_dl","num_max_heartrate_bpm","num_oldpeak_in_st_depression")], col = ifelse(data_imp$bin_sex_is_male == 1, "purple", "green"))
+
+#Looks better with imputed data. 
+```
+
+
+
+
+  
+
+
